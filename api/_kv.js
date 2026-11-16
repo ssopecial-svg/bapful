@@ -1,6 +1,9 @@
 // Upstash Redis (Vercel Marketplace) REST 연결 – 추가 설치 없이 fetch만 사용
-const URL_ = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+// 연결 방식/접두어가 달라도 찾을 수 있게 환경변수 이름을 넓게 탐색
+const E = process.env;
+const pick = (re, not) => { const k = Object.keys(E).find(k => re.test(k) && (!not || !not.test(k)) && E[k]); return k ? E[k] : undefined; };
+const URL_ = E.KV_REST_API_URL || E.UPSTASH_REDIS_REST_URL || pick(/(KV_REST_API_URL|REDIS_REST_URL)$/);
+const TOKEN = E.KV_REST_API_TOKEN || E.UPSTASH_REDIS_REST_TOKEN || pick(/(KV_REST_API_TOKEN|REDIS_REST_TOKEN)$/, /READ_ONLY/);
 
 async function cmd(...args) {
   if (!URL_ || !TOKEN) { const e = new Error('NO_STORE'); e.code = 'NO_STORE'; throw e; }
@@ -32,4 +35,5 @@ function wrap(fn) {
   };
 }
 const okMember = m => typeof m === 'string' && /^M\d{4}$/.test(m);
-module.exports = { cmd, send, body, wrap, okMember };
+const envNames = () => Object.keys(E).filter(k => /KV|REDIS|UPSTASH/i.test(k));
+module.exports = { envNames, hasStore: () => !!(URL_ && TOKEN), cmd, send, body, wrap, okMember };

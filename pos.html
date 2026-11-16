@@ -111,6 +111,8 @@
   .set .it button.learning { background: var(--g); color: #fff; }
   .set input { width: 100%; height: 52px; border: 2px solid var(--line); border-radius: 14px; padding: 0 16px; font: inherit; font-size: 18px; user-select: text; -webkit-user-select: text; }
   .set .sec { margin-top: 22px; font-weight: 700; font-size: 17px; }
+  .lastscan { font-size: 14px; color: var(--sub); padding: 0 4px; }
+  .lastscan.blink { animation: lb .6s ease; color: #4E7A00; font-weight: 700; } @keyframes lb { 30% { transform: scale(1.03); } }
   .toast { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); background: rgba(30,30,30,.9); color: #fff; padding: 14px 24px; border-radius: 999px; font-weight: 600; font-size: 17px; z-index: 80; animation: tin .25s ease; white-space: nowrap; }
   .toast.err { background: var(--red); }
   @keyframes tin { from { opacity: 0; transform: translate(-50%, -10px); } }
@@ -122,6 +124,7 @@
     <img src="/pos/logo.png" alt="밥풀">
     <div><div class="t">밥풀 POS</div><div class="s">밥풀마트 · 1번 계산대</div></div>
     <div class="sp"></div>
+    <div class="pill on" id="scn" style="background:#F1F3F5;color:#444"><i style="background:#96DC01"></i><span>리더기 입력 대기</span></div>
     <div class="pill" id="srv"><i></i><span>서버 확인 중</span></div>
     <button class="gear" id="openSet" aria-label="설정">⚙︎</button>
   </header>
@@ -135,11 +138,12 @@
         <div class="camtools" id="camtools" style="display:none"><button id="flip">카메라 전환</button><button id="stopCam">끄기</button></div>
         <div class="camoff" id="camoff">
           <div style="font-size:44px">📷</div>
-          <b style="font-size:20px">식재료 바코드를 스캔해 주세요</b>
-          <p>카메라를 켜거나, 바코드 스캐너를 연결해서 찍어도 돼요.<br>아래 식재료를 눌러서 직접 담을 수도 있어요.</p>
+          <b style="font-size:20px">바코드 리더기로 찍어주세요</b>
+          <p>리더기가 없으면 카메라를 켜서 찍어도 돼요.<br>아래 식재료를 눌러서 직접 담을 수도 있어요.</p>
           <button class="btn" id="startCam">카메라 켜기</button>
         </div>
       </div>
+      <div id="lastscan" class="lastscan">리더기로 바코드를 찍으면 바로 담겨요</div>
       <div class="tiles-h"><b>식재료 바로 담기</b><span>바코드가 안 읽힐 때 눌러주세요</span></div>
       <div class="tiles" id="tiles"></div>
     </section>
@@ -255,21 +259,44 @@
   function handle(raw) {
     const code = String(raw || '').trim(); if (!code) return;
     const now = Date.now(); if (code === lastCode && now - lastAt < 1800) return; lastCode = code; lastAt = now;
-    const mem = code.match(/BAPFUL:(M\d{4})/i);
+    const mem = code.match(/BAPFUL\W?(M\d{4})/i) || code.match(/^(M\d{4})$/i);
     if (mem) { if (!cart.size) { beep(false); toast('먼저 식재료 바코드를 찍어주세요', true); return; } sendTo(mem[1].toUpperCase()); return; }
     if (mode === 'member') { beep(false); toast('밥풀 멤버십 QR을 찍어주세요', true); return; }
     if (learnId) { assign(code, learnId); toast(`${ITEM[learnId].name} 바코드를 등록했어요`); add(learnId); learnId = null; renderSet(); return; }
     if (map[code] && ITEM[map[code]]) { add(map[code]); return; }
     beep(false); askAssign(code);
   }
-  // 바코드 스캐너(키보드처럼 입력되는 기기)
-  let buf = '', bt = 0;
+  // 바코드 리더기(블루투스/USB, 키보드처럼 입력되는 기기)
+  // 아이패드 키보드가 한글로 되어 있어도 읽히도록 e.code(물리 키)로 글자를 복원
+  const SH = { Digit1:'!', Digit2:'@', Digit3:'#', Digit4:'$', Digit5:'%', Digit6:'^', Digit7:'&', Digit8:'*', Digit9:'(', Digit0:')', Minus:'_', Equal:'+', Semicolon:':', Quote:'"', Comma:'<', Period:'>', Slash:'?' };
+  const NS = { Minus:'-', Equal:'=', Semicolon:';', Quote:"'", Comma:',', Period:'.', Slash:'/', Space:' ' };
+  function keyChar(e) {
+    const c = e.code || '';
+    if (/^Key[A-Z]$/.test(c)) { const ch = c.slice(3); return e.shiftKey ? ch : ch.toLowerCase(); }
+    if (/^Digit\d$/.test(c)) return e.shiftKey ? SH[c] : c.slice(5);
+    if (/^Numpad\d$/.test(c)) return c.slice(6);
+    if (e.shiftKey && SH[c]) return SH[c];
+    if (NS[c]) return NS[c];
+    return e.key && e.key.length === 1 ? e.key : '';
+  }
+  let buf = '', bt = 0, flushT;
+  const flush = () => { clearTimeout(flushT); if (buf.length >= 4) { scanned(buf); handle(buf); } buf = ''; };
   document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT') return;
-    const now = Date.now(); if (now - bt > 300) buf = ''; bt = now;
-    if (e.key === 'Enter') { if (buf.length >= 4) handle(buf); buf = ''; e.preventDefault(); return; }
-    if (e.key.length === 1) buf += e.key;
-  });
+    if (e.target.tagName === 'INPUT' && e.target.id !== 'kbd') return;
+    const now = Date.now(); if (now - bt > 400) buf = ''; bt = now;
+    if (e.key === 'Enter' || e.key === 'Tab' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Tab') { e.preventDefault(); flush(); return; }
+    const ch = keyChar(e); if (!ch) return;
+    e.preventDefault(); buf += ch;
+    clearTimeout(flushT); flushT = setTimeout(() => { if (buf.length >= 8) flush(); }, 150);   // 끝에 Enter가 없는 리더기 대비
+  }, true);
+  // 화면 키보드는 띄우지 않으면서 리더기 입력을 계속 받도록 숨은 입력칸에 초점 유지
+  const kbd = document.createElement('input'); kbd.id = 'kbd'; kbd.setAttribute('inputmode', 'none'); kbd.autocomplete = 'off';
+  kbd.style.cssText = 'position:fixed;left:-100px;top:0;width:1px;height:1px;opacity:0;';
+  document.body.appendChild(kbd);
+  const refocus = () => { const a = document.activeElement; if (!a || a === document.body || a === kbd) kbd.focus({ preventScroll: true }); };
+  document.addEventListener('click', () => setTimeout(refocus, 0)); kbd.addEventListener('input', () => kbd.value = '');
+  setInterval(refocus, 1500); refocus();
+  function scanned(code) { const el = document.getElementById('lastscan'); if (el) { el.textContent = '마지막 스캔: ' + code; el.classList.remove('blink'); void el.offsetWidth; el.classList.add('blink'); } }
 
   /* ---------- 모르는 바코드 ---------- */
   let pending = null;
@@ -341,8 +368,12 @@
   /* ---------- 서버 상태 ---------- */
   async function health() {
     const p = $('#srv');
-    try { const r = await fetch('/api/health', { cache: 'no-store' }); const j = await r.json(); if (j.ok) { p.className = 'pill on'; p.lastChild.textContent = '서버 연결됨'; } else throw 0; }
-    catch (e) { p.className = 'pill off'; p.lastChild.textContent = 'Storage 연결 필요'; }
+    try {
+      const r = await fetch('/api/health', { cache: 'no-store' });
+      if (r.status === 404) { p.className = 'pill off'; p.lastChild.textContent = 'api 폴더 없음'; return; }
+      const j = await r.json();
+      if (j.ok) { p.className = 'pill on'; p.lastChild.textContent = '서버 연결됨'; } else { p.className = 'pill off'; p.lastChild.textContent = 'Storage 연결 필요'; p.title = j.reason || ''; }
+    } catch (e) { p.className = 'pill off'; p.lastChild.textContent = '서버 응답 없음'; }
   }
   health(); setInterval(health, 20000);
   loadMap();
