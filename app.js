@@ -591,14 +591,78 @@
     const flash = el('div', 'flash', s); flash.dataset.fill = 1;
     hs(s.content, [500, 2040, 710, 2250], () => { pop(flash, 'go'); setTimeout(conf.open, 450); }, { r: 110 });
   }
-  {
-    const s = screen('reg_qr'); regDock(s); let t;
-    hs(s.content, [365, 450, 597, 560], () => replace('reg_cam'), { r: 50 });
-    const line = el('div', 'scanline', s.content); at(line, 300, 780 - SB, 590, 8);
-    enter.reg_qr = () => { clearTimeout(t); t = setTimeout(() => current === 'reg_qr' && replace('reg_qr_done'), 2200); };
-    leave.reg_qr = () => clearTimeout(t);
+  /* ---------------- 밥풀 멤버십 QR ↔ 아이패드 POS 연동 ---------------- */
+  const MEMBER = (() => {
+    let m = null; try { m = localStorage.getItem('bapful_member'); } catch (e) {}
+    if (!/^M\d{4}$/.test(m || '')) { m = 'M' + String(1 + Math.floor(Math.random() * 400)).padStart(4, '0'); try { localStorage.setItem('bapful_member', m); } catch (e) {} }
+    return m;
+  })();
+  let received = null;
+  function drawMemberQR(cv) {
+    const Q = window.MEMBER_QR; if (!Q) return false;
+    const n = Q.n, hex = Q.codes[parseInt(MEMBER.slice(1), 10) - 1]; if (!hex) return false;
+    let bits = ''; for (const h of hex) bits += parseInt(h, 16).toString(2).padStart(4, '0');
+    const S = cv.width, cell = S / n, g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, S, S); g.fillStyle = '#000';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (bits[r * n + c] === '1') g.fillRect(Math.floor(c * cell), Math.floor(r * cell), Math.ceil(cell), Math.ceil(cell));
+    return true;
   }
-  { const s = screen('reg_qr_done'); regDock(s); hs(s.content, [160, 1610, 1040, 1790], () => go('fr_cold'), { r: 60 }); }
+  {
+    const s = screen('reg_qr'); regDock(s); let t = null, failed = 0;
+    hs(s.content, [365, 490, 597, 610], () => replace('reg_cam'), { r: 50 });
+    const cv = el('canvas', 'memberqr', s.content); cv.width = cv.height = 516; at(cv, 345, 801 - SB, 516, 516);
+    const ok = drawMemberQR(cv); if (!ok) cv.style.display = 'none';
+    const no = el('div', 'memberno', s.content); at(no, 0, 1400 - SB, W, 60); no.textContent = '회원번호 ' + MEMBER;
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/inbox?member=' + MEMBER, { cache: 'no-store' });
+        const j = await r.json();
+        if (j.ok && j.data && j.data.items && j.data.items.length) { received = j.data; if (navigator.vibrate) navigator.vibrate([60, 40, 60]); replace('reg_qr_done'); return; }
+        failed = 0;
+      } catch (e) { if (++failed === 5) toast('서버에 연결할 수 없어요'); }
+      if (current === 'reg_qr') t = setTimeout(poll, 1200);
+    };
+    enter.reg_qr = () => { clearTimeout(t); failed = 0; t = setTimeout(poll, 600); };
+    leave.reg_qr = () => clearTimeout(t);
+    // QR을 1.5초 길게 누르면 시연용으로 7개가 도착한 것처럼 동작
+    let lp; cv.style.pointerEvents = 'auto';
+    cv.addEventListener('pointerdown', () => { lp = setTimeout(() => { received = { items: ITEMS.map(i => ({ id: i.id, qty: 1 })), points: 80 }; replace('reg_qr_done'); }, 1500); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => clearTimeout(lp)));
+  }
+  {
+    const s = screen('reg_qr_done'); regDock(s);
+    // 받은 식재료 목록 (등록 확인 시트)
+    const dim = el('div', 'modaldim', s); dim.dataset.fill = 1;
+    const sh = el('div', 'rlist', s);
+    const head = el('div', 'rl-head', sh);
+    const body = el('div', 'rl-body', sh);
+    const save = img(U('rc_save'), sh, 0, 0, 'rl-save');
+    const open = () => {
+      const items = (received && received.items) || [];
+      const n = items.reduce((a, b) => a + (b.qty || 1), 0);
+      head.innerHTML = `<b>${items.length}개의 식재료를 찾았어요</b><span>수정 후 냉장고에 추가해 주세요</span>`;
+      body.innerHTML = '';
+      const card = el('div', 'rl-card', body);
+      items.forEach((it, k) => {
+        const I = ITEM[it.id]; if (!I) return;
+        const row = el('div', 'rl-row', card);
+        row.innerHTML = `<img src="${I.img}" alt=""><div class="rl-t"><b>${I.name}</b><span>${qtyText(I, it.qty)}</span></div><div class="rl-q"><button data-d="-1">−</button><button data-d="1">+</button></div><svg class="rl-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z" fill="none" stroke="#555" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 6l4 4" stroke="#555" stroke-width="1.8"/></svg>`;
+        row.querySelector('.rl-edit').addEventListener('click', e => { e.stopPropagation(); row.classList.toggle('editing'); });
+        row.querySelectorAll('.rl-q button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); it.qty = Math.max(1, it.qty + +b.dataset.d); row.querySelector('.rl-t span').textContent = qtyText(I, it.qty); }));
+        row.style.animationDelay = (k * 70) + 'ms';
+      });
+      dim.classList.add('on'); sh.classList.add('on'); sh.scrollTop = 0;
+    };
+    const close = () => { dim.classList.remove('on'); sh.classList.remove('on'); };
+    dim.addEventListener('click', close);
+    save.style.pointerEvents = 'auto';
+    save.addEventListener('click', () => {
+      try { const mine = JSON.parse(localStorage.getItem('bapful_fridge') || '[]'); (received.items || []).forEach(i => mine.push({ ...i, at: Date.now() })); localStorage.setItem('bapful_fridge', JSON.stringify(mine)); } catch (e) {}
+      close(); toast('냉장고에 추가했어요'); setTimeout(() => go('fr_list'), 500);
+    });
+    hs(s.content, [160, 1610, 1040, 1790], open, { r: 60 });
+    leave.reg_qr_done = close;
+  }
   { const s = screen('reg_manual'); regDock(s); hs(s.content, M.reg_manual.ctas[0], () => { toast('냉장고에 추가했어요'); setTimeout(() => go('fr_cold'), 400); }, { r: 50 }); hs(s.content, [480, 2170, 730, 2270], goBack, { r: 20 }); }
   { const s = screen('fr_pop'); back(s); } // (디자인 참고용: 팝오버는 냉장고 화면에서 직접 동작)
 

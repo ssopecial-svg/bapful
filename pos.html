@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>밥풀 POS</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="밥풀 POS">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root { --g: #96DC01; --gd: #7DBB00; --ink: #111; --sub: #6B6F75; --line: #E6E8EB; --bg: #F8F9FA; --card: #fff; --red: #FF5A4E; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: 'Pretendard', -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; overflow: hidden; }
+  button { font: inherit; border: 0; background: none; color: inherit; cursor: pointer; }
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 24px; background: #fff; border-bottom: 1px solid var(--line); }
+  header img { height: 40px; }
+  header .t { font-weight: 700; font-size: 20px; }
+  header .s { color: var(--sub); font-size: 15px; }
+  header .sp { flex: 1; }
+  .pill { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #F1F3F5; font-size: 14px; font-weight: 600; color: var(--sub); }
+  .pill i { width: 9px; height: 9px; border-radius: 50%; background: #C4C8CD; }
+  .pill.on { background: #F1FBDD; color: #4E7A00; } .pill.on i { background: var(--g); box-shadow: 0 0 0 4px rgba(150,220,1,.25); }
+  .pill.off { background: #FFEDEB; color: #C33; } .pill.off i { background: var(--red); }
+  .gear { width: 44px; height: 44px; border-radius: 12px; background: #F1F3F5; font-size: 22px; }
+
+  main { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; padding: 20px 24px; min-height: 0; }
+  @media (orientation: portrait) { main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } }
+  .left { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  .cam { position: relative; border-radius: 28px; overflow: hidden; background: #1A1C1E; aspect-ratio: 4 / 3; max-height: 52vh; }
+  @media (orientation: portrait) { .cam { max-height: 34vh; aspect-ratio: auto; height: 34vh; } }
+  #reader { position: absolute; inset: 0; }
+  #reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
+  #reader img, #reader__dashboard, #reader__header_message { display: none !important; }
+  .guide { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .frame { width: 70%; height: 46%; border-radius: 22px; box-shadow: 0 0 0 2000px rgba(0,0,0,.28); position: relative; }
+  .frame::before, .frame::after { content: ''; position: absolute; inset: -3px; border-radius: 24px; border: 4px solid var(--g); clip-path: polygon(0 0, 18% 0, 18% 6px, 6px 6px, 6px 22%, 0 22%, 0 78%, 6px 78%, 6px calc(100% - 6px), 18% calc(100% - 6px), 18% 100%, 82% 100%, 82% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 78%, 100% 78%, 100% 22%, calc(100% - 6px) 22%, calc(100% - 6px) 6px, 82% 6px, 82% 0, 100% 0, 100% 100%, 0 100%); }
+  .laser { position: absolute; left: 8%; right: 8%; height: 3px; top: 50%; background: var(--g); box-shadow: 0 0 16px var(--g); animation: laser 1.8s ease-in-out infinite alternate; border-radius: 3px; }
+  @keyframes laser { from { top: 12%; } to { top: 88%; } }
+  .camlabel { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; color: #fff; font-weight: 700; font-size: 18px; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+  .camoff { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; color: #fff; text-align: center; padding: 20px; }
+  .camoff p { color: #C9CDD2; font-size: 15px; line-height: 1.5; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 56px; padding: 0 26px; border-radius: 16px; background: var(--g); color: #fff; font-weight: 700; font-size: 18px; transition: transform .1s, filter .2s; }
+  .btn:active { transform: scale(.97); }
+  .btn.ghost { background: #F1F3F5; color: var(--ink); }
+  .btn.dark { background: #2B2D30; }
+  .btn[disabled] { filter: grayscale(1) brightness(1.15); pointer-events: none; }
+  .camtools { position: absolute; top: 14px; right: 14px; display: flex; gap: 8px; }
+  .camtools button { height: 40px; padding: 0 14px; border-radius: 12px; background: rgba(255,255,255,.18); color: #fff; font-weight: 600; font-size: 14px; backdrop-filter: blur(8px); }
+  .flashok { position: absolute; inset: 0; border: 6px solid var(--g); border-radius: 28px; opacity: 0; pointer-events: none; }
+  .flashok.go { animation: fl .5s ease; } @keyframes fl { 30% { opacity: 1; } 100% { opacity: 0; } }
+
+  .tiles-h { display: flex; justify-content: space-between; align-items: baseline; }
+  .tiles-h b { font-size: 18px; } .tiles-h span { color: var(--sub); font-size: 14px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; overflow-y: auto; }
+  .tile { background: #fff; border-radius: 20px; padding: 10px 10px 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; border: 2px solid transparent; transition: transform .1s, border-color .2s; }
+  .tile:active { transform: scale(.96); }
+  .tile img { width: 76%; aspect-ratio: 1; object-fit: contain; }
+  .tile b { font-size: 15px; font-weight: 600; text-align: center; line-height: 1.25; }
+  .tile span { font-size: 13px; color: var(--sub); }
+  .tile.hit { border-color: var(--g); animation: hit .5s ease; } @keyframes hit { 30% { transform: scale(1.06); } }
+
+  .right { background: #fff; border-radius: 28px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .rh { padding: 22px 24px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
+  .rh b { font-size: 22px; } .rh button { color: var(--sub); font-size: 15px; font-weight: 600; }
+  .list { flex: 1; overflow-y: auto; padding: 6px 20px; }
+  .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--sub); gap: 10px; text-align: center; font-size: 16px; line-height: 1.5; }
+  .empty .big { font-size: 46px; }
+  .row { display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: center; padding: 14px 4px; border-bottom: 1px solid var(--line); animation: rowin .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes rowin { from { opacity: 0; transform: translateX(30px); } }
+  .row img { width: 64px; height: 64px; object-fit: contain; border-radius: 14px; background: #fff; }
+  .row .n { font-weight: 600; font-size: 17px; } .row .p { color: var(--sub); font-size: 14px; margin-top: 3px; }
+  .q { display: flex; align-items: center; gap: 4px; background: #F4F5F6; border-radius: 12px; padding: 4px; }
+  .q button { width: 38px; height: 38px; border-radius: 10px; font-size: 22px; font-weight: 500; }
+  .q button:active { background: #E6E8EB; }
+  .q span { min-width: 28px; text-align: center; font-weight: 700; font-size: 17px; }
+  .row.bump { animation: bump .4s ease; } @keyframes bump { 40% { background: #F1FBDD; } }
+  .sum { padding: 18px 24px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+  .sum div { display: flex; justify-content: space-between; font-size: 16px; color: var(--sub); }
+  .sum .tot { color: var(--ink); font-size: 24px; font-weight: 800; }
+  .pay { padding: 0 24px 22px; display: grid; gap: 10px; }
+  .pay .btn { height: 68px; font-size: 21px; width: 100%; }
+
+  /* 오버레이 */
+  .ov { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(17,17,17,.45); padding: 30px; }
+  .ov.on { display: flex; animation: fade .2s ease; } @keyframes fade { from { opacity: 0; } }
+  .card { background: #fff; border-radius: 32px; padding: 34px; width: min(720px, 100%); max-height: 100%; overflow-y: auto; text-align: center; animation: pop .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes pop { from { transform: scale(.9); opacity: 0; } }
+  .card h2 { font-size: 28px; margin: 10px 0 8px; } .card p { color: var(--sub); font-size: 17px; line-height: 1.5; }
+  .card .row2 { display: flex; gap: 12px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
+  .member .cam2 { margin: 18px auto 0; width: 100%; }
+  .member .ill { width: 180px; border-radius: 50%; }
+  .succ { background: #F8F9FA; }
+  .succ img { width: 340px; max-width: 70%; }
+  .succ .pts { display: inline-block; margin-top: 14px; padding: 10px 20px; border-radius: 999px; background: #F1FBDD; color: #4E7A00; font-weight: 800; font-size: 20px; }
+  .succ .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+  .succ .chips span { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 15px; font-weight: 600; }
+  .assign .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+  .assign .grid button { background: #F4F5F6; border-radius: 16px; padding: 10px; font-size: 14px; font-weight: 600; }
+  .assign .grid img { width: 70%; aspect-ratio: 1; object-fit: contain; display: block; margin: 0 auto 4px; mix-blend-mode: multiply; }
+  .code { font-family: ui-monospace, Menlo, monospace; background: #F4F5F6; padding: 4px 10px; border-radius: 8px; font-size: 16px; color: var(--ink); }
+  .set { text-align: left; }
+  .set h2 { text-align: left; }
+  .set .it { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .set .it img { width: 52px; height: 52px; object-fit: contain; }
+  .set .it small { display: block; color: var(--sub); font-size: 13px; margin-top: 2px; word-break: break-all; }
+  .set .it button { background: #F1F3F5; border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 14px; }
+  .set .it button.learning { background: var(--g); color: #fff; }
+  .set input { width: 100%; height: 52px; border: 2px solid var(--line); border-radius: 14px; padding: 0 16px; font: inherit; font-size: 18px; user-select: text; -webkit-user-select: text; }
+  .set .sec { margin-top: 22px; font-weight: 700; font-size: 17px; }
+  .toast { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); background: rgba(30,30,30,.9); color: #fff; padding: 14px 24px; border-radius: 999px; font-weight: 600; font-size: 17px; z-index: 80; animation: tin .25s ease; white-space: nowrap; }
+  .toast.err { background: var(--red); }
+  @keyframes tin { from { opacity: 0; transform: translate(-50%, -10px); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <img src="/pos/logo.png" alt="밥풀">
+    <div><div class="t">밥풀 POS</div><div class="s">밥풀마트 · 1번 계산대</div></div>
+    <div class="sp"></div>
+    <div class="pill" id="srv"><i></i><span>서버 확인 중</span></div>
+    <button class="gear" id="openSet" aria-label="설정">⚙︎</button>
+  </header>
+  <main>
+    <section class="left">
+      <div class="cam" id="cam">
+        <div id="reader"></div>
+        <div class="guide" id="guide" style="display:none"><div class="frame"><div class="laser"></div></div></div>
+        <div class="camlabel" id="camlabel"></div>
+        <div class="flashok" id="flashok"></div>
+        <div class="camtools" id="camtools" style="display:none"><button id="flip">카메라 전환</button><button id="stopCam">끄기</button></div>
+        <div class="camoff" id="camoff">
+          <div style="font-size:44px">📷</div>
+          <b style="font-size:20px">식재료 바코드를 스캔해 주세요</b>
+          <p>카메라를 켜거나, 바코드 스캐너를 연결해서 찍어도 돼요.<br>아래 식재료를 눌러서 직접 담을 수도 있어요.</p>
+          <button class="btn" id="startCam">카메라 켜기</button>
+        </div>
+      </div>
+      <div class="tiles-h"><b>식재료 바로 담기</b><span>바코드가 안 읽힐 때 눌러주세요</span></div>
+      <div class="tiles" id="tiles"></div>
+    </section>
+    <section class="right">
+      <div class="rh"><b>계산 목록</b><button id="clear">전체 삭제</button></div>
+      <div class="list" id="list"></div>
+      <div class="sum">
+        <div><span>상품 수</span><span id="cnt">0개</span></div>
+        <div class="tot"><span>합계</span><span id="tot">0원</span></div>
+      </div>
+      <div class="pay"><button class="btn" id="pay" disabled>밥풀 멤버십으로 보내기</button></div>
+    </section>
+  </main>
+</div>
+
+<!-- 멤버십 스캔 -->
+<div class="ov" id="ovMember"><div class="card member">
+  <img class="ill" src="/pos/phone_char.png" alt="">
+  <h2>밥풀 멤버십 QR을 찍어주세요</h2>
+  <p>고객님 휴대폰의 <b>밥풀 → 식재료 등록 → QR</b> 화면을<br>카메라(또는 스캐너)에 보여주세요.</p>
+  <div class="row2"><button class="btn ghost" id="cancelMember">취소</button></div>
+</div></div>
+<!-- 전송 완료 -->
+<div class="ov" id="ovDone"><div class="card succ">
+  <img src="/pos/success.png" alt="">
+  <h2 id="doneTitle">휴대폰으로 보냈어요!</h2>
+  <p id="doneSub"></p>
+  <div class="chips" id="doneChips"></div>
+  <div class="pts">+80P 적립 완료</div>
+  <div class="row2"><button class="btn" id="newSale">새 계산 시작</button></div>
+</div></div>
+<!-- 모르는 바코드 -->
+<div class="ov" id="ovAssign"><div class="card assign">
+  <h2>처음 보는 바코드예요</h2>
+  <p><span class="code" id="unknownCode"></span><br>어떤 식재료인지 눌러주면 다음부터 자동으로 인식해요.</p>
+  <div class="grid" id="assignGrid"></div>
+  <div class="row2"><button class="btn ghost" id="cancelAssign">무시하기</button></div>
+</div></div>
+<!-- 설정 -->
+<div class="ov" id="ovSet"><div class="card set">
+  <h2>설정</h2>
+  <p>상품의 실제 바코드를 등록하려면 <b>다시 등록</b>을 누른 뒤 그 상품 바코드를 찍으세요.</p>
+  <div id="setList"></div>
+  <div class="sec">회원 번호로 직접 보내기</div>
+  <p style="margin:6px 0 10px">QR이 안 읽힐 때: 폰 화면 맨 아래 작은 회원번호(M0000)를 입력하세요.</p>
+  <div style="display:flex; gap:10px"><input id="memberIn" placeholder="예: M0123" inputmode="text" autocapitalize="characters"><button class="btn" id="memberGo">보내기</button></div>
+  <div class="row2"><a class="btn ghost" href="/labels.html" target="_blank" style="text-decoration:none">바코드 라벨 인쇄</a><button class="btn dark" id="closeSet">닫기</button></div>
+</div></div>
+
+<script src="/items.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const won = n => n.toLocaleString('ko-KR') + '원';
+  const cart = new Map();              // id -> qty
+  let map = {};                        // barcode -> id
+  let learnId = null, lastCode = '', lastAt = 0, mode = 'item';
+
+  /* ---------- 바코드 연결표 ---------- */
+  function baseMap() { const m = {}; ITEMS.forEach(i => m[i.code] = i.id); return m; }
+  function loadMap() {
+    map = Object.assign(baseMap(), JSON.parse(localStorage.getItem('bapful_pos_map') || '{}'));
+    fetch('/api/barcodes').then(r => r.json()).then(j => { if (j.ok) { Object.assign(map, j.map); saveLocal(); renderSet(); } }).catch(() => {});
+  }
+  function saveLocal() { const m = {}; for (const k in map) if (!ITEMS.some(i => i.code === k)) m[k] = map[k]; localStorage.setItem('bapful_pos_map', JSON.stringify(m)); }
+  function assign(code, id) { map[code] = id; saveLocal(); renderSet(); fetch('/api/barcodes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, id }) }).catch(() => {}); }
+
+  /* ---------- 소리 ---------- */
+  let ac;
+  function beep(ok = true) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator(), g = ac.createGain(); o.connect(g); g.connect(ac.destination);
+      o.type = ok ? 'sine' : 'square'; o.frequency.value = ok ? 1480 : 220;
+      g.gain.setValueAtTime(.0001, ac.currentTime); g.gain.exponentialRampToValueAtTime(.25, ac.currentTime + .01); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + (ok ? .14 : .32));
+      o.start(); o.stop(ac.currentTime + .35);
+    } catch (e) {}
+  }
+  function toast(msg, err) { const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 1800); }
+
+  /* ---------- 화면 ---------- */
+  const tiles = $('#tiles');
+  ITEMS.forEach(it => {
+    const b = document.createElement('button'); b.className = 'tile'; b.dataset.id = it.id;
+    b.innerHTML = `<img src="${it.img}" alt=""><b>${it.name}</b><span>${won(it.price)}</span>`;
+    b.onclick = () => add(it.id, true); tiles.appendChild(b);
+  });
+  function render() {
+    const list = $('#list'); list.innerHTML = '';
+    let n = 0, sum = 0;
+    if (!cart.size) list.innerHTML = '<div class="empty"><div class="big">🧺</div>상품 바코드를 찍으면<br>여기에 담겨요</div>';
+    for (const [id, q] of cart) {
+      const it = ITEM[id]; n += q; sum += q * it.price;
+      const r = document.createElement('div'); r.className = 'row'; r.dataset.id = id;
+      r.innerHTML = `<img src="${it.img}" alt=""><div><div class="n">${it.name}</div><div class="p">${won(it.price)}</div></div><div class="q"><button data-d="-1">−</button><span>${q}</span><button data-d="1">+</button></div>`;
+      r.querySelectorAll('button').forEach(b => b.onclick = () => { const v = (cart.get(id) || 0) + +b.dataset.d; if (v <= 0) cart.delete(id); else cart.set(id, v); render(); });
+      list.appendChild(r);
+    }
+    $('#cnt').textContent = n + '개'; $('#tot').textContent = won(sum);
+    $('#pay').disabled = !cart.size;
+  }
+  function add(id, manual) {
+    const had = cart.has(id); cart.set(id, (cart.get(id) || 0) + 1); render(); beep();
+    const t = tiles.querySelector(`[data-id="${id}"]`); t.classList.remove('hit'); void t.offsetWidth; t.classList.add('hit');
+    const r = $(`#list .row[data-id="${id}"]`); if (r && had) { r.classList.remove('bump'); void r.offsetWidth; r.classList.add('bump'); }
+    if (!manual) { const f = $('#flashok'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+  }
+  $('#clear').onclick = () => { cart.clear(); render(); };
+  render();
+
+  /* ---------- 코드 처리 (카메라·스캐너 공통) ---------- */
+  function handle(raw) {
+    const code = String(raw || '').trim(); if (!code) return;
+    const now = Date.now(); if (code === lastCode && now - lastAt < 1800) return; lastCode = code; lastAt = now;
+    const mem = code.match(/BAPFUL:(M\d{4})/i);
+    if (mem) { if (!cart.size) { beep(false); toast('먼저 식재료 바코드를 찍어주세요', true); return; } sendTo(mem[1].toUpperCase()); return; }
+    if (mode === 'member') { beep(false); toast('밥풀 멤버십 QR을 찍어주세요', true); return; }
+    if (learnId) { assign(code, learnId); toast(`${ITEM[learnId].name} 바코드를 등록했어요`); add(learnId); learnId = null; renderSet(); return; }
+    if (map[code] && ITEM[map[code]]) { add(map[code]); return; }
+    beep(false); askAssign(code);
+  }
+  // 바코드 스캐너(키보드처럼 입력되는 기기)
+  let buf = '', bt = 0;
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    const now = Date.now(); if (now - bt > 300) buf = ''; bt = now;
+    if (e.key === 'Enter') { if (buf.length >= 4) handle(buf); buf = ''; e.preventDefault(); return; }
+    if (e.key.length === 1) buf += e.key;
+  });
+
+  /* ---------- 모르는 바코드 ---------- */
+  let pending = null;
+  const ag = $('#assignGrid');
+  ITEMS.forEach(it => { const b = document.createElement('button'); b.innerHTML = `<img src="${it.img}" alt="">${it.name}`; b.onclick = () => { assign(pending, it.id); $('#ovAssign').classList.remove('on'); add(it.id); toast('다음부터 자동으로 인식해요'); }; ag.appendChild(b); });
+  function askAssign(code) { pending = code; $('#unknownCode').textContent = code; $('#ovAssign').classList.add('on'); }
+  $('#cancelAssign').onclick = () => $('#ovAssign').classList.remove('on');
+
+  /* ---------- 멤버십으로 보내기 ---------- */
+  $('#pay').onclick = () => { mode = 'member'; $('#ovMember').classList.add('on'); setLabel(); if (!running) startCam(); };
+  $('#cancelMember').onclick = () => { mode = 'item'; $('#ovMember').classList.remove('on'); setLabel(); };
+  let sending = false;
+  async function sendTo(member) {
+    if (sending) return; sending = true;
+    const items = [...cart].map(([id, qty]) => ({ id, qty }));
+    try {
+      const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ member, items, points: 80 }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.message || j.error || ('HTTP ' + r.status));
+      beep(); setTimeout(() => beep(), 160);
+      $('#ovMember').classList.remove('on');
+      const n = items.reduce((a, b) => a + b.qty, 0);
+      $('#doneTitle').textContent = `식재료 ${n}개를 보냈어요!`;
+      $('#doneSub').textContent = `회원 ${member}님 휴대폰 냉장고에 바로 등록돼요.`;
+      $('#doneChips').innerHTML = items.map(i => `<span>${ITEM[i.id].name} ${qtyText(ITEM[i.id], i.qty)}</span>`).join('');
+      $('#ovDone').classList.add('on');
+      cart.clear(); render(); mode = 'item'; setLabel();
+      clearTimeout(window.__nt); window.__nt = setTimeout(() => $('#ovDone').classList.remove('on'), 8000);
+    } catch (e) {
+      beep(false); toast('전송 실패: ' + (String(e.message).includes('Redis') || String(e.message).includes('NO_STORE') ? '버셀 Storage(Redis) 연결이 필요해요' : e.message), true);
+    } finally { sending = false; }
+  }
+  $('#newSale').onclick = () => $('#ovDone').classList.remove('on');
+
+  /* ---------- 카메라 ---------- */
+  let qr = null, running = false, facing = 'environment';
+  function setLabel() { $('#camlabel').textContent = running ? (mode === 'member' ? '밥풀 멤버십 QR을 비춰주세요' : learnId ? `${ITEM[learnId].name}의 바코드를 비춰주세요` : '상품 바코드를 네모 안에 비춰주세요') : ''; }
+  async function startCam() {
+    if (!window.Html5Qrcode) { toast('스캔 모듈을 불러오지 못했어요 (인터넷 확인)', true); return; }
+    try {
+      if (!qr) {
+        const F = Html5QrcodeSupportedFormats;
+        qr = new Html5Qrcode('reader', { verbose: false, formatsToSupport: [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF], experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+      }
+      await qr.start({ facingMode: facing }, { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * .7), height: Math.floor(h * .46) }), disableFlip: false }, txt => handle(txt), () => {});
+      running = true; $('#camoff').style.display = 'none'; $('#guide').style.display = 'flex'; $('#camtools').style.display = 'flex'; setLabel();
+    } catch (e) { toast('카메라를 켤 수 없어요: 권한을 허용해 주세요', true); }
+  }
+  async function stopCam() { if (qr && running) { try { await qr.stop(); } catch (e) {} } running = false; $('#camoff').style.display = 'flex'; $('#guide').style.display = 'none'; $('#camtools').style.display = 'none'; setLabel(); }
+  $('#startCam').onclick = startCam;
+  $('#stopCam').onclick = stopCam;
+  $('#flip').onclick = async () => { facing = facing === 'environment' ? 'user' : 'environment'; await stopCam(); startCam(); };
+
+  /* ---------- 설정 ---------- */
+  function renderSet() {
+    const box = $('#setList'); box.innerHTML = '';
+    ITEMS.forEach(it => {
+      const codes = Object.keys(map).filter(k => map[k] === it.id);
+      const d = document.createElement('div'); d.className = 'it';
+      d.innerHTML = `<img src="${it.img}" alt=""><div><b>${it.name}</b><small>${codes.join(' · ')}</small></div><button class="${learnId === it.id ? 'learning' : ''}">${learnId === it.id ? '찍어주세요…' : '다시 등록'}</button>`;
+      d.querySelector('button').onclick = () => { learnId = learnId === it.id ? null : it.id; renderSet(); setLabel(); if (learnId && !running) startCam(); };
+      box.appendChild(d);
+    });
+  }
+  $('#openSet').onclick = () => { renderSet(); $('#ovSet').classList.add('on'); };
+  $('#closeSet').onclick = () => { learnId = null; setLabel(); $('#ovSet').classList.remove('on'); };
+  $('#memberGo').onclick = () => { const v = $('#memberIn').value.trim().toUpperCase(); if (!/^M\d{4}$/.test(v)) { toast('M과 숫자 4자리로 입력해 주세요', true); return; } if (!cart.size) { toast('먼저 식재료를 담아주세요', true); return; } $('#ovSet').classList.remove('on'); sendTo(v); };
+
+  /* ---------- 서버 상태 ---------- */
+  async function health() {
+    const p = $('#srv');
+    try { const r = await fetch('/api/health', { cache: 'no-store' }); const j = await r.json(); if (j.ok) { p.className = 'pill on'; p.lastChild.textContent = '서버 연결됨'; } else throw 0; }
+    catch (e) { p.className = 'pill off'; p.lastChild.textContent = 'Storage 연결 필요'; }
+  }
+  health(); setInterval(health, 20000);
+  loadMap();
+  window.__pos = { handle, cart };
+})();
+</script>
+</body>
+</html>
