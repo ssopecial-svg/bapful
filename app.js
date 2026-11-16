@@ -6,8 +6,8 @@
 (() => {
   const W = 1206, SB = 186, FULL = 2436, MIN = 2334;
   const M = D.meta, C = D.comps;
-  const S = (id) => `/assets/s/${id}.webp`;
-  const U = (n) => `/assets/ui/${n}.png`;
+  const S = (id) => `/s/${id}.webp`;
+  const U = (n) => `/ui/${n}.png`;
   const stage = document.getElementById('stage');
   const viewport = document.getElementById('viewport');
   let scale = 1, stageH = FULL;
@@ -272,8 +272,8 @@
     for (let i = 0; i < 3; i++) slides.push(makeSlide());
     function load(sl, k) {
       const e = REELS[(k % 5 + 5) % 5]; if (sl.key === e) return; sl.key = e;
-      sl.v.src = `/reels/${e}.mp4`; sl.ui.src = `/assets/reels/${e}_ui.png`;
-      const r = D.reels[e].btn; sl.btn.src = `/assets/reels/${e}_btn.png`; at(sl.btn, r[0] - 3, r[1] - 3 - SB);
+      sl.v.src = `/reels/${e}.mp4`; sl.ui.onerror = function () { if (!this.dataset.fb) { this.dataset.fb = 1; this.src = `/assets/reels/${e}_ui.png`; } }; sl.ui.dataset.fb = ''; sl.ui.src = `/reels/${e}_ui.png`;
+      const r = D.reels[e].btn; sl.btn.onerror = function () { if (!this.dataset.fb) { this.dataset.fb = 1; this.src = `/assets/reels/${e}_btn.png`; } }; sl.btn.dataset.fb = ''; sl.btn.src = `/reels/${e}_btn.png`; at(sl.btn, r[0] - 3, r[1] - 3 - SB);
     }
     function place(off = 0, anim = false) {
       slides.forEach((sl, i) => { sl.style.transition = anim ? 'transform .36s cubic-bezier(.2,.8,.2,1)' : 'none'; sl.style.transform = `translateY(${(i - 1) * stageH + off}px)`; });
