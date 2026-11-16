@@ -613,16 +613,30 @@
     const cv = el('canvas', 'memberqr', s.content); cv.width = cv.height = 516; at(cv, 345, 801 - SB, 516, 516);
     const ok = drawMemberQR(cv); if (!ok) cv.style.display = 'none';
     const no = el('div', 'memberno', s.content); at(no, 0, 1400 - SB, W, 60); no.textContent = '회원번호 ' + MEMBER;
+    // 1순위: 우리 서버(/api) · 2순위: 공개 중계(ntfy.sh) – Storage가 없어도 동작
+    const RELAY = 'https://ntfy.sh/bapful-cc33-' + MEMBER;
+    let since = 0, seen = new Set();
+    const got = (data) => { received = data; if (navigator.vibrate) navigator.vibrate([60, 40, 60]); replace('reg_qr_done'); };
     const poll = async () => {
+      let ok = false;
       try {
         const r = await fetch('/api/inbox?member=' + MEMBER, { cache: 'no-store' });
         const j = await r.json();
-        if (j.ok && j.data && j.data.items && j.data.items.length) { received = j.data; if (navigator.vibrate) navigator.vibrate([60, 40, 60]); replace('reg_qr_done'); return; }
-        failed = 0;
-      } catch (e) { if (++failed === 5) toast('서버에 연결할 수 없어요'); }
+        if (j.ok) { ok = true; if (j.data && j.data.items && j.data.items.length) return got(j.data); }
+      } catch (e) {}
+      try {
+        const r = await fetch(`${RELAY}/json?poll=1&since=${since}`, { cache: 'no-store' });
+        const txt = await r.text(); ok = true;
+        for (const line of txt.split('\n')) {
+          if (!line.trim()) continue; const m = JSON.parse(line);
+          if (m.event !== 'message' || seen.has(m.id)) continue; seen.add(m.id);
+          try { const d = JSON.parse(m.message); if (d.items && d.items.length) return got(d); } catch (e) {}
+        }
+      } catch (e) {}
+      if (ok) failed = 0; else if (++failed === 5) toast('인터넷 연결을 확인해 주세요');
       if (current === 'reg_qr') t = setTimeout(poll, 1200);
     };
-    enter.reg_qr = () => { clearTimeout(t); failed = 0; t = setTimeout(poll, 600); };
+    enter.reg_qr = () => { clearTimeout(t); failed = 0; since = Math.floor(Date.now() / 1000) - 5; t = setTimeout(poll, 600); };
     leave.reg_qr = () => clearTimeout(t);
     // QR을 1.5초 길게 누르면 시연용으로 7개가 도착한 것처럼 동작
     let lp; cv.style.pointerEvents = 'auto';

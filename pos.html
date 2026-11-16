@@ -113,6 +113,18 @@
   .set .sec { margin-top: 22px; font-weight: 700; font-size: 17px; }
   .lastscan { font-size: 14px; color: var(--sub); padding: 0 4px; }
   .lastscan.blink { animation: lb .6s ease; color: #4E7A00; font-weight: 700; } @keyframes lb { 30% { transform: scale(1.03); } }
+  .hero { display: flex; align-items: center; gap: 22px; background: #fff; border-radius: 28px; padding: 26px 28px; }
+  .hero b { font-size: 24px; } .hero p { color: var(--sub); font-size: 16px; margin-top: 6px; } .hero em { font-style: normal; color: #4E7A00; font-weight: 700; }
+  .scanner { position: relative; width: 92px; height: 92px; border-radius: 24px; background: #F1FBDD; flex: none; overflow: hidden; }
+  .scanner::before { content: ''; position: absolute; left: 22px; right: 22px; top: 26px; bottom: 26px; background: repeating-linear-gradient(90deg, #111 0 3px, transparent 3px 6px, #111 6px 8px, transparent 8px 12px); opacity: .8; }
+  .beam { position: absolute; left: 12px; right: 12px; height: 3px; background: var(--g); box-shadow: 0 0 10px var(--g); animation: laser 1.6s ease-in-out infinite alternate; }
+  @keyframes laser { from { top: 18%; } to { top: 82%; } }
+  .tiles { grid-template-columns: repeat(4, 1fr); }
+  .member .total { margin-top: 18px; font-size: 20px; color: var(--sub); } .member .total b { color: var(--ink); font-size: 30px; margin-left: 8px; }
+  .member .wait { display: inline-flex; align-items: center; gap: 10px; margin-top: 18px; padding: 12px 20px; border-radius: 999px; background: #F1FBDD; color: #4E7A00; font-weight: 700; font-size: 17px; }
+  .member .wait i { width: 10px; height: 10px; border-radius: 50%; background: var(--g); animation: blinkdot 1s infinite; } @keyframes blinkdot { 50% { opacity: .2; } }
+  .member .alt { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+  .member .alt input { width: 200px; height: 56px; border: 2px solid var(--line); border-radius: 14px; padding: 0 16px; font: inherit; font-size: 18px; text-align: center; user-select: text; -webkit-user-select: text; }
   .toast { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); background: rgba(30,30,30,.9); color: #fff; padding: 14px 24px; border-radius: 999px; font-weight: 600; font-size: 17px; z-index: 80; animation: tin .25s ease; white-space: nowrap; }
   .toast.err { background: var(--red); }
   @keyframes tin { from { opacity: 0; transform: translate(-50%, -10px); } }
@@ -130,17 +142,11 @@
   </header>
   <main>
     <section class="left">
-      <div class="cam" id="cam">
-        <div id="reader"></div>
-        <div class="guide" id="guide" style="display:none"><div class="frame"><div class="laser"></div></div></div>
-        <div class="camlabel" id="camlabel"></div>
-        <div class="flashok" id="flashok"></div>
-        <div class="camtools" id="camtools" style="display:none"><button id="flip">카메라 전환</button><button id="stopCam">끄기</button></div>
-        <div class="camoff" id="camoff">
-          <div style="font-size:44px">📷</div>
-          <b style="font-size:20px">바코드 리더기로 찍어주세요</b>
-          <p>리더기가 없으면 카메라를 켜서 찍어도 돼요.<br>아래 식재료를 눌러서 직접 담을 수도 있어요.</p>
-          <button class="btn" id="startCam">카메라 켜기</button>
+      <div class="hero">
+        <div class="scanner"><div class="beam"></div></div>
+        <div>
+          <b>바코드 리더기로 상품을 찍어주세요</b>
+          <p>다 담았으면 오른쪽 아래 <em>계산하기</em>를 눌러주세요.</p>
         </div>
       </div>
       <div id="lastscan" class="lastscan">리더기로 바코드를 찍으면 바로 담겨요</div>
@@ -154,7 +160,7 @@
         <div><span>상품 수</span><span id="cnt">0개</span></div>
         <div class="tot"><span>합계</span><span id="tot">0원</span></div>
       </div>
-      <div class="pay"><button class="btn" id="pay" disabled>밥풀 멤버십으로 보내기</button></div>
+      <div class="pay"><button class="btn" id="pay" disabled>계산하기</button></div>
     </section>
   </main>
 </div>
@@ -162,9 +168,12 @@
 <!-- 멤버십 스캔 -->
 <div class="ov" id="ovMember"><div class="card member">
   <img class="ill" src="/pos/phone_char.png" alt="">
-  <h2>밥풀 멤버십 QR을 찍어주세요</h2>
-  <p>고객님 휴대폰의 <b>밥풀 → 식재료 등록 → QR</b> 화면을<br>카메라(또는 스캐너)에 보여주세요.</p>
-  <div class="row2"><button class="btn ghost" id="cancelMember">취소</button></div>
+  <h2>계산 완료! 밥풀 멤버십 QR을 찍어주세요</h2>
+  <p>고객님 휴대폰의 <b>밥풀 → 식재료 등록 → QR</b> 화면을<br>바코드 리더기로 찍으면 식재료가 휴대폰에 바로 등록돼요.</p>
+  <div class="total">결제 금액<b id="payTotal">0원</b></div>
+  <div class="wait"><i></i>멤버십 QR 기다리는 중</div>
+  <div class="alt"><input id="memberIn2" placeholder="회원번호 M0000" autocapitalize="characters"><button class="btn ghost" id="memberGo2">직접 입력</button></div>
+  <div class="row2"><button class="btn ghost" id="cancelMember">계산 취소</button></div>
 </div></div>
 <!-- 전송 완료 -->
 <div class="ov" id="ovDone"><div class="card succ">
@@ -185,7 +194,7 @@
 <!-- 설정 -->
 <div class="ov" id="ovSet"><div class="card set">
   <h2>설정</h2>
-  <p>상품의 실제 바코드를 등록하려면 <b>다시 등록</b>을 누른 뒤 그 상품 바코드를 찍으세요.</p>
+  <p>상품의 실제 바코드를 등록하려면 <b>다시 등록</b>을 누른 뒤 리더기로 그 상품 바코드를 찍으세요.</p>
   <div id="setList"></div>
   <div class="sec">회원 번호로 직접 보내기</div>
   <p style="margin:6px 0 10px">QR이 안 읽힐 때: 폰 화면 맨 아래 작은 회원번호(M0000)를 입력하세요.</p>
@@ -194,7 +203,6 @@
 </div></div>
 
 <script src="/items.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (() => {
   const $ = s => document.querySelector(s);
@@ -250,7 +258,7 @@
     const had = cart.has(id); cart.set(id, (cart.get(id) || 0) + 1); render(); beep();
     const t = tiles.querySelector(`[data-id="${id}"]`); t.classList.remove('hit'); void t.offsetWidth; t.classList.add('hit');
     const r = $(`#list .row[data-id="${id}"]`); if (r && had) { r.classList.remove('bump'); void r.offsetWidth; r.classList.add('bump'); }
-    if (!manual) { const f = $('#flashok'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+    
   }
   $('#clear').onclick = () => { cart.clear(); render(); };
   render();
@@ -260,8 +268,8 @@
     const code = String(raw || '').trim(); if (!code) return;
     const now = Date.now(); if (code === lastCode && now - lastAt < 1800) return; lastCode = code; lastAt = now;
     const mem = code.match(/BAPFUL\W?(M\d{4})/i) || code.match(/^(M\d{4})$/i);
-    if (mem) { if (!cart.size) { beep(false); toast('먼저 식재료 바코드를 찍어주세요', true); return; } sendTo(mem[1].toUpperCase()); return; }
-    if (mode === 'member') { beep(false); toast('밥풀 멤버십 QR을 찍어주세요', true); return; }
+    if (mem) { if (!cart.size) { beep(false); toast('먼저 식재료 바코드를 찍어주세요', true); return; } if (mode !== 'member') { beep(false); toast('계산하기를 먼저 눌러주세요', true); return; } sendTo(mem[1].toUpperCase()); return; }
+    if (mode === 'member') { beep(false); toast('지금은 밥풀 멤버십 QR을 찍어주세요', true); return; }
     if (learnId) { assign(code, learnId); toast(`${ITEM[learnId].name} 바코드를 등록했어요`); add(learnId); learnId = null; renderSet(); return; }
     if (map[code] && ITEM[map[code]]) { add(map[code]); return; }
     beep(false); askAssign(code);
@@ -306,16 +314,24 @@
   $('#cancelAssign').onclick = () => $('#ovAssign').classList.remove('on');
 
   /* ---------- 멤버십으로 보내기 ---------- */
-  $('#pay').onclick = () => { mode = 'member'; $('#ovMember').classList.add('on'); setLabel(); if (!running) startCam(); };
+  $('#pay').onclick = () => { mode = 'member'; $('#payTotal').textContent = $('#tot').textContent; $('#memberIn2').value = ''; $('#ovMember').classList.add('on'); beep(); };
+  $('#memberGo2').onclick = () => { const v = $('#memberIn2').value.trim().toUpperCase(); if (!/^M\d{4}$/.test(v)) { toast('M과 숫자 4자리로 입력해 주세요', true); return; } sendTo(v); };
   $('#cancelMember').onclick = () => { mode = 'item'; $('#ovMember').classList.remove('on'); setLabel(); };
   let sending = false;
   async function sendTo(member) {
     if (sending) return; sending = true;
     const items = [...cart].map(([id, qty]) => ({ id, qty }));
     try {
-      const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ member, items, points: 80 }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) throw new Error(j.message || j.error || ('HTTP ' + r.status));
+      const payload = { member, items, points: 80 };
+      let sent = false;
+      try {
+        const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const j = await r.json().catch(() => ({})); sent = r.ok && j.ok;
+      } catch (e) {}
+      if (!sent) {   // Storage가 없으면 공개 중계로 전송
+        const r = await fetch('https://ntfy.sh/bapful-cc33-' + member, { method: 'POST', body: JSON.stringify({ ...payload, at: Date.now() }) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+      }
       beep(); setTimeout(() => beep(), 160);
       $('#ovMember').classList.remove('on');
       const n = items.reduce((a, b) => a + b.qty, 0);
@@ -331,24 +347,7 @@
   }
   $('#newSale').onclick = () => $('#ovDone').classList.remove('on');
 
-  /* ---------- 카메라 ---------- */
-  let qr = null, running = false, facing = 'environment';
-  function setLabel() { $('#camlabel').textContent = running ? (mode === 'member' ? '밥풀 멤버십 QR을 비춰주세요' : learnId ? `${ITEM[learnId].name}의 바코드를 비춰주세요` : '상품 바코드를 네모 안에 비춰주세요') : ''; }
-  async function startCam() {
-    if (!window.Html5Qrcode) { toast('스캔 모듈을 불러오지 못했어요 (인터넷 확인)', true); return; }
-    try {
-      if (!qr) {
-        const F = Html5QrcodeSupportedFormats;
-        qr = new Html5Qrcode('reader', { verbose: false, formatsToSupport: [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF], experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
-      }
-      await qr.start({ facingMode: facing }, { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * .7), height: Math.floor(h * .46) }), disableFlip: false }, txt => handle(txt), () => {});
-      running = true; $('#camoff').style.display = 'none'; $('#guide').style.display = 'flex'; $('#camtools').style.display = 'flex'; setLabel();
-    } catch (e) { toast('카메라를 켤 수 없어요: 권한을 허용해 주세요', true); }
-  }
-  async function stopCam() { if (qr && running) { try { await qr.stop(); } catch (e) {} } running = false; $('#camoff').style.display = 'flex'; $('#guide').style.display = 'none'; $('#camtools').style.display = 'none'; setLabel(); }
-  $('#startCam').onclick = startCam;
-  $('#stopCam').onclick = stopCam;
-  $('#flip').onclick = async () => { facing = facing === 'environment' ? 'user' : 'environment'; await stopCam(); startCam(); };
+  let running = false; const startCam = () => {}; const setLabel = () => {};
 
   /* ---------- 설정 ---------- */
   function renderSet() {
@@ -370,10 +369,10 @@
     const p = $('#srv');
     try {
       const r = await fetch('/api/health', { cache: 'no-store' });
-      if (r.status === 404) { p.className = 'pill off'; p.lastChild.textContent = 'api 폴더 없음'; return; }
+      if (r.status === 404) { p.className = 'pill on'; p.lastChild.textContent = '연결됨 (중계 모드)'; return; }
       const j = await r.json();
-      if (j.ok) { p.className = 'pill on'; p.lastChild.textContent = '서버 연결됨'; } else { p.className = 'pill off'; p.lastChild.textContent = 'Storage 연결 필요'; p.title = j.reason || ''; }
-    } catch (e) { p.className = 'pill off'; p.lastChild.textContent = '서버 응답 없음'; }
+      if (j.ok) { p.className = 'pill on'; p.lastChild.textContent = '서버 연결됨'; } else { p.className = 'pill on'; p.lastChild.textContent = '연결됨 (중계 모드)'; p.title = j.reason || ''; }
+    } catch (e) { p.className = navigator.onLine ? 'pill on' : 'pill off'; p.lastChild.textContent = navigator.onLine ? '연결됨 (중계 모드)' : '인터넷 끊김'; }
   }
   health(); setInterval(health, 20000);
   loadMap();
