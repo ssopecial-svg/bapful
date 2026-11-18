@@ -638,7 +638,7 @@
     };
     enter.reg_qr = () => { clearTimeout(t); failed = 0; since = Math.floor(Date.now() / 1000) - 5; t = setTimeout(poll, 600); };
     leave.reg_qr = () => clearTimeout(t);
-    // QR을 1.5초 길게 누르면 시연용으로 7개가 도착한 것처럼 동작
+    // QR을 1.5초 길게 누르면 시연용으로 전체 품목이 도착한 것처럼 동작
     let lp; cv.style.pointerEvents = 'auto';
     cv.addEventListener('pointerdown', () => { lp = setTimeout(() => { received = { items: ITEMS.map(i => ({ id: i.id, qty: 1 })), points: 80 }; replace('reg_qr_done'); }, 1500); });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => clearTimeout(lp)));
