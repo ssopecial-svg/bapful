@@ -710,7 +710,57 @@
     const conf = sheetLayer(s, 'reg_confirm', 1242, 2124); conf.sh.classList.add('center'); conf.sh.style.left = '-18px';
     hs(conf.sh, [40, 1800, 1200, 2080], () => { conf.close(); go('fr_cold'); }, { r: 50 });
     const flash = el('div', 'flash', s); flash.dataset.fill = 1;
-    hs(s.content, [500, 2040, 710, 2250], () => { pop(flash, 'go'); setTimeout(conf.open, 450); }, { r: 110 });
+    // ---- 실제 카메라 ----
+    const BOX = [150, 760, 1055, 1920];
+    const vf = el('div', 'camview', s.content); at(vf, BOX[0], BOX[1] - SB, BOX[2] - BOX[0], BOX[3] - BOX[1]);
+    const video = el('video', '', vf); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', ''); video.setAttribute('muted', ''); video.autoplay = true;
+    const still = el('canvas', 'camstill', vf);
+    img(U('cam_frame'), s.content, 130, 735 - SB, 'camframe');
+    let stream = null, torch = false;
+    async function startCam() {
+      if (stream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1920 } }, audio: false });
+        if (current !== 'reg_cam') { stopCam(); return; }
+        video.srcObject = stream; await video.play().catch(() => {}); vf.classList.add('on');
+      } catch (e) { toast('카메라 권한을 허용해 주세요'); }
+    }
+    function stopCam() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } vf.classList.remove('on', 'frozen'); torch = false; }
+    enter.reg_cam = () => { vf.classList.remove('frozen'); setTimeout(startCam, 350); };
+    leave.reg_cam = stopCam;
+    // 셔터: 화면 멈춤 + 플래시 → 등록 확인
+    hs(s.content, [500, 2040, 710, 2250], () => {
+      if (stream && video.videoWidth) {
+        const vw = video.videoWidth, vh = video.videoHeight, bw = BOX[2] - BOX[0], bh = BOX[3] - BOX[1];
+        const sc = Math.max(bw / vw, bh / vh), sw = bw / sc, sh = bh / sc;
+        still.width = bw; still.height = bh;
+        still.getContext('2d').drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, bw, bh);
+        vf.classList.add('frozen');
+      }
+      pop(flash, 'go'); if (navigator.vibrate) navigator.vibrate(20);
+      setTimeout(conf.open, 450);
+    }, { r: 110 });
+    const close0 = conf.close; conf.close = () => { close0(); vf.classList.remove('frozen'); };
+    conf.dim.onclick = conf.close;
+    // 앨범에서 고르기
+    const pick = el('input', 'native', s.content); pick.type = 'file'; pick.accept = 'image/*'; at(pick, 165, 2065 - SB, 160, 160);
+    pick.onchange = () => {
+      const f = pick.files[0]; if (!f) return; const im = new Image();
+      im.onload = () => {
+        const bw = BOX[2] - BOX[0], bh = BOX[3] - BOX[1], sc = Math.max(bw / im.width, bh / im.height);
+        still.width = bw; still.height = bh; const g = still.getContext('2d');
+        g.drawImage(im, (bw - im.width * sc) / 2, (bh - im.height * sc) / 2, im.width * sc, im.height * sc);
+        vf.classList.add('on', 'frozen'); setTimeout(conf.open, 300); pick.value = '';
+      };
+      im.src = URL.createObjectURL(f);
+    };
+    // 플래시(손전등) – 지원하는 폰에서만
+    hs(s.content, [880, 2065, 1040, 2225], async () => {
+      const t = stream && stream.getVideoTracks()[0];
+      const caps = t && t.getCapabilities ? t.getCapabilities() : {};
+      if (!caps.torch) { toast('이 기기에서는 플래시를 켤 수 없어요'); return; }
+      torch = !torch; try { await t.applyConstraints({ advanced: [{ torch }] }); } catch (e) {}
+    }, { r: 80 });
   }
   /* ---------------- 밥풀 멤버십 QR ↔ 아이패드 POS 연동 ---------------- */
   const MEMBER = (() => {
