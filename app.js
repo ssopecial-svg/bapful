@@ -13,7 +13,19 @@
   let scale = 1, stageH = FULL;
 
   /* ---------------- 레이아웃 ---------------- */
+  // 댓글 입력 중에는 화면 크기를 다시 계산하지 않고, 입력창만 키보드 위로 올림
+  let baseH = 0;
+  const isTyping = () => { const a = document.activeElement; return a && (a.tagName === 'INPUT' && a.type !== 'time' && a.type !== 'file' || a.tagName === 'TEXTAREA'); };
   function layout() {
+    if (isTyping() && baseH) {
+      const vv = window.visualViewport, visH = vv ? vv.height : innerHeight;
+      const kb = Math.max(0, baseH - visH);
+      document.querySelectorAll('.typing').forEach(b => b.style.transform = `translateY(${-kb / scale}px)`);
+      if (window.scrollY) window.scrollTo(0, 0);
+      return;
+    }
+    baseH = innerHeight;
+    document.querySelectorAll('.pinned').forEach(b => { if (b.style.transform) b.style.transform = ''; });
     const vw = innerWidth, vh = innerHeight;
     scale = Math.min(vw / W, vh / MIN);
     stageH = vh / scale;
@@ -65,6 +77,8 @@
     (m.strips || []).forEach(st => {     // 화면 밖으로 넘친 가로 스크롤 영역
       const h = el('div', 'hscroll', content); at(h, 0, st.y0 - SB, W, st.y1 - st.y0);
       const i = el('img', '', h); i.src = S(id + '_strip' + m.strips.indexOf(st)); i.style.width = st.w + 'px';
+      // 카드 단위로 딱딱 멈추게 (스냅)
+      const end = st.w - W; (st.snaps || [0, end]).filter(x => x === end || end - x > 60).forEach(x => { const k = el('div', 'snap', h); k.style.left = x + 'px'; });
     });
     s.scroller = scroller; s.content = content; screens[id] = s; s.sid = id;
     return s;
@@ -113,10 +127,16 @@
 
   // 탭바
   const NAVX = { home: [244, 439, 618, 802, 979], amain: [226, 403, 582, 784, 979], my: [223, 400, 579, 763, 957], cmain: [223, 400, 579, 763, 957] };
+  // 탭바: 모든 탭에서 같은 한 장(navu_N)을 써서 크기·위치가 똑같음
+  const NAVU = { y0: 3660, pb: 3902, xs: [223, 400, 579, 763, 957] };
   function navbar(s, key) {
-    const n = D.navs[key];
-    const l = pin(s, U('nav_' + key), n.y0, (n.pillBottom - n.y0) + 66);
-    NAVX[key].forEach((x, i) => hs(l, [x - 88, n.pillBottom - 190, x + 88, n.pillBottom - 10], () => tab(TABS[i]), { r: 80, dim: false }));
+    const ti = { home: 0, cmain: 2, amain: 3, my: 4 }[key];
+    const l = pin(s, U('navu_' + ti), NAVU.y0, (NAVU.pb - NAVU.y0) + 66);
+    l.classList.add('navbar');
+    NAVU.xs.forEach((x, i) => {
+      const h = hs(l, [x - 88, NAVU.pb - 200, x + 88, NAVU.pb - 30], () => { if (navigator.vibrate) navigator.vibrate(8); tab(TABS[i]); }, { r: 90, dim: false });
+      h.classList.add('navbtn');
+    });
     s.content.style.height = (parseFloat(s.content.style.height) + 120) + 'px';
     return l;
   }
@@ -165,17 +185,45 @@
   { // 개인화1 - 약관
     const s = screen('p1');
     const p = C.p1_pill; const pill = img(U('p1_pill'), s.content, p[0], p[1] - SB);
-    const a = C.p1_all; const all = stateImg(s.content, U('p1_all'), a[0], a[1], 104, 105, true);
-    const cta = img(U('p1_cta'), s.content, C.p1_cta[0], C.p1_cta[1] - SB, 'press-t');
-    hs(s.content, [60, 1470, 1146, 1640], () => { all.set(!all.value); pop(all); cta.classList.toggle('disabled', !all.value); }, { r: 30 });
-    hs(s.content, [60, 2238, 1146, 2409], () => { if (all.value) go('p2'); else pop(all, 'shake'); }, { r: 50 });
-    enter.p1 = () => pop(pill, 'drop');
-  }
-  function chips(s, list, prefix, single) {
-    const items = list.map((c, i) => {
-      const st = stateImg(s.content, U(prefix + i), c[0], c[1], c[2] - c[0], c[3] - c[1], !!c[4]);
-      hs(s.content, c.slice(0, 4), () => { if (single) items.forEach(o => o.set(o === st)); else st.set(!st.value); pop(st, 'tap'); }, { r: 80, dim: false });
+    const a = C.p1_all; const all = stateImg(s.content, U('p1_all'), a[0], a[1], 104, 105, false);
+    const cta = img(U('p1_cta'), s.content, C.p1_cta[0], C.p1_cta[1] - SB, 'press-t disabled');
+    // 개별 항목: [0]=필수 약관, [1]=필수 개인정보, [2]=선택 마케팅
+    const items = [1699, 1843, 1987].map((y, i) => {
+      const st = stateImg(s.content, U('p1_chk' + i), 92, y - 10, 56, 46, false);
+      hs(s.content, [60, y - 50, 1000, y + 76], () => { st.set(!st.value); pop(st, 'tap'); sync(); }, { r: 20 });
       return st;
+    });
+    const sync = () => {
+      const every = items.every(i => i.value), must = items[0].value && items[1].value;
+      if (all.value !== every) { all.set(every); pop(all); }
+      cta.classList.toggle('disabled', !must);
+    };
+    hs(s.content, [60, 1470, 1146, 1640], () => { const v = !all.value; items.forEach(i => i.set(v)); all.set(v); pop(all); cta.classList.toggle('disabled', !v); }, { r: 30 });
+    hs(s.content, [60, 2238, 1146, 2409], () => { if (items[0].value && items[1].value) go('p2'); else { pop(all, 'shake'); toast('필수 항목에 동의해 주세요'); } }, { r: 50 });
+    enter.p1 = () => pop(pill, 'dropout');
+  }
+  // 칩: 처음엔 모두 선택 안 됨. counter가 있으면 'N개 선택됨' 표시
+  function chips(s, list, prefix, single, counter) {
+    const items = list.map((c, i) => {
+      const st = stateImg(s.content, U(prefix + i), c[0], c[1], c[2] - c[0], c[3] - c[1], false);
+      hs(s.content, c.slice(0, 4), () => {
+        if (single) items.forEach(o => o.set(o === st ? !st.value : false)); else st.set(!st.value);
+        pop(st, 'tap'); if (counter) counter(items.filter(o => o.value).length);
+      }, { r: 80, dim: false });
+      return st;
+    });
+    return items;
+  }
+  function countLabel(s) {
+    const l = el('div', 'cntlabel', s.content); at(l, 530, 2108 - SB, 300, 56); l.style.display = 'none';
+    return n => { l.style.display = n ? 'flex' : 'none'; l.textContent = n + '개 선택됨'; pop(l, 'tap'); };
+  }
+  // 투표: 처음엔 모두 회색, 눌러서 선택 (여러 개 가능)
+  const VOTES = {"cmain": [[114, 1263, 1101, 1419], [114, 1440, 1101, 1596], [114, 1617, 1101, 1773]], "cvote": [[120, 882, 1107, 1037], [120, 1059, 1107, 1214], [120, 1236, 1107, 1391]]};
+  function votes(s, key) {
+    VOTES[key].forEach((b, i) => {
+      const st = stateImg(s.content, U(`vote_${key}_${i}`), b[0], b[1], b[2] - b[0], b[3] - b[1], false);
+      hs(s.content, b, () => { st.set(!st.value); pop(st, 'tap'); if (navigator.vibrate) navigator.vibrate(8); }, { r: 30, dim: false });
     });
   }
   const BACKBOX = [0, 186, 190, 340], SKIPBOX = [930, 186, 1206, 340];
@@ -183,8 +231,8 @@
     const s = screen(id);
     hs(s.content, BACKBOX, goBack, { r: 40 }); hs(s.content, SKIPBOX, () => go(nx), { r: 30 });
     const cta = M[id].ctas[M[id].ctas.length - 1]; hs(s.content, cta, () => go(nx), { r: 50 });
-    if (id === 'p2') chips(s, C.chips.p2, 'chip_p2_', false);
-    if (id === 'p3') chips(s, C.chips.p3, 'chip_p3_', false);
+    if (id === 'p2') chips(s, C.chips.p2, 'chip_p2_', false, countLabel(s));
+    if (id === 'p3') chips(s, C.chips.p3, 'chip_p3_', false, countLabel(s));
     if (id === 'p4') {
       chips(s, C.chips.p4a, 'chip_p4a_', true); chips(s, C.chips.p4b, 'chip_p4b_', true);
       const row = (dy) => {
@@ -201,7 +249,7 @@
     }
     if (id === 'p5') {
       const rows = [[1040, 1240], [1263, 1463], [1472, 1672], [1695, 1895]];
-      C.toggles.forEach((t, i) => { const st = stateImg(s.content, U('tog_' + i), t[0], t[1], 195, 126, !!t[2]); hs(s.content, [60, rows[i][0], 1146, rows[i][1]], () => st.set(!st.value), { r: 20 }); });
+      C.toggles.forEach((t, i) => { const st = stateImg(s.content, U('tog_' + i), t[0], t[1], 195, 126, false); hs(s.content, [60, rows[i][0], 1146, rows[i][1]], () => st.set(!st.value), { r: 20 }); });
     }
   });
   { // 개인화6 - 냉장고 채우기
@@ -232,8 +280,8 @@
     hs(c, b(140, 4500, 1270, 5650), () => go('cpost_photo'), { r: 40 });
     // 가로 스크롤 카드 안 터치
     const strips = c.querySelectorAll('.hscroll');
-    if (strips[0]) [0, 1, 2, 3].forEach(i => hs(strips[0], [60 + i * 445, 0, 60 + i * 445 + 420, 420], () => go('fr_info'), { r: 30 }));
-    if (strips[1]) [0, 1, 2, 3, 4].forEach(i => hs(strips[1], [60 + i * 382, 0, 60 + i * 382 + 360, 800], () => openReels(i), { r: 30 }));
+    if (strips[0]) [60, 636, 1212].forEach(x => hs(strips[0], [x, 0, x + 515, 420], () => go('fr_info'), { r: 30 }));
+    if (strips[1]) [60, 528, 995, 1464].forEach((x, i) => hs(strips[1], [x, 0, x + 430, 800], () => openReels(i), { r: 30 }));
     strips.forEach(st => st.oy = 0);
     navbar(s, 'home');
   }
@@ -278,7 +326,7 @@
     function place(off = 0, anim = false) {
       slides.forEach((sl, i) => { sl.style.transition = anim ? 'transform .36s cubic-bezier(.2,.8,.2,1)' : 'none'; sl.style.transform = `translateY(${(i - 1) * stageH + off}px)`; });
     }
-    function arrange() { load(slides[0], idx - 1); load(slides[1], idx); load(slides[2], idx + 1); place(0); }
+    function arrange() { load(slides[0], idx - 1); load(slides[1], idx); load(slides[2], idx + 1); place(0); s.syncReelUI && s.syncReelUI(); }
     function playCur() {
       slides.forEach((sl, i) => { if (i !== 1) { sl.v.pause(); } });
       const v = slides[1].v; slides[1].pause.classList.remove('on');
@@ -292,7 +340,7 @@
       slides.forEach((sl, i) => { sl.style.transition = 'none'; sl.style.transform = `translateY(${(i - 1) * stageH + off}px)`; });
       load(slides[d === 1 ? 2 : 0], idx + d);
       void feed.offsetWidth; place(0, true);
-      slides[1].v.currentTime = 0; playCur();
+      slides[1].v.currentTime = 0; playCur(); s.syncReelUI && s.syncReelUI();
     }
     // 세로 스와이프
     let sy = null, dy = 0, t0 = 0, sx = 0, vert = null;
@@ -316,7 +364,22 @@
     hs(top, [60, 2361, 1146, 2532], () => openSheet(), { r: 44 });
     hs(top, [0, 360, 1020, 1900], () => { const sl = slides[1], v = sl.v; if (v.paused) { v.play(); sl.pause.classList.remove('on'); } else { v.pause(); sl.pause.classList.add('on'); } }, { dim: false, r: 0 });
     // 좋아요 하트 톡톡
-    hs(top, [1050, 1250, 1206, 1400], (e, h) => { const sl = slides[1]; burst(top, 1128, 1300 - SB, U('emoji_0')); }, { r: 60, dim: false });
+    // 좋아요: 누르면 빨간 하트로 채워짐 (릴스마다 따로 기억)
+    const liked = {}, followed = {};
+    const heart = el('div', 'rheart', top); at(heart, 1066, 1285 - SB, 75, 66);
+    heart.innerHTML = '<svg viewBox="0 0 24 21"><path d="M12 20.3l-1.5-1.3C5.3 14.3 2 11.3 2 7.5 2 4.4 4.4 2 7.5 2c1.7 0 3.4.8 4.5 2.1C13.1 2.8 14.8 2 16.5 2 19.6 2 22 4.4 22 7.5c0 3.8-3.3 6.8-8.5 11.5L12 20.3z" fill="#FF4D5E" stroke="#FF4D5E" stroke-width="1"/></svg>';
+    const syncLike = () => { heart.classList.toggle('on', !!liked[slides[1].key]); };
+    hs(top, [1040, 1250, 1206, 1400], () => {
+      const k = slides[1].key; liked[k] = !liked[k]; syncLike();
+      if (liked[k]) { pop(heart, 'pop'); burst(top, 1103, 1318 - SB, U('emoji_0'), 6); if (navigator.vibrate) navigator.vibrate(10); }
+    }, { r: 60, dim: false });
+    // 팔로우 → 팔로잉
+    const FX = { curry: 495, noodle: 465, risotto: 495, yogurt: 549, picnic: 402 };
+    const fol = el('div', 'rfollow', top); fol.textContent = '팔로잉';
+    const syncFollow = () => { const k = slides[1].key; at(fol, FX[k] || 495, 1878 - SB, 176, 95); fol.classList.toggle('on', !!followed[k]); fHs.style.left = (FX[k] || 495) + 'px'; };
+    const fHs = hs(top, [495, 1870, 671, 1980], () => { const k = slides[1].key; followed[k] = !followed[k]; syncFollow(); if (followed[k]) toast('팔로우했어요'); }, { r: 50, dim: false });
+    fHs.style.zIndex = 7;
+    s.syncReelUI = () => { syncLike(); syncFollow(); };
 
     // 레시피 시트 (밑에서 올라오는 카드)
     let sheetOpen = false;
@@ -346,7 +409,12 @@
     const gend = e => { if (gy === null) return; const d = (e.clientY - gy) / scale; gy = null; sheetWrap.style.transition = ''; sheetWrap.style.transform = ''; if (d > 220) closeSheet(); };
     sheetWrap.addEventListener('pointerup', gend); sheetWrap.addEventListener('pointercancel', gend);
 
-    openReels = (k = 0) => { idx = k; arrange(); slides.forEach(sl => sl.v.currentTime = 0); if (current === 'reels') { playCur(); return; } (TABS.includes(current) ? tab : go)('reels'); };
+    openReels = (k = 0, homeBack = false) => {
+      idx = k; arrange(); slides.forEach(sl => sl.v.currentTime = 0);
+      if (current === 'reels') { playCur(); return; }
+      if (homeBack) { if (busy) return; stack.length = 0; stack.push('home'); history.replaceState({ id: 'reels' }, '', '#reels'); show('reels', 'push'); return; }   // 요리완료 → 둘러보기: 뒤로가면 홈
+      (TABS.includes(current) ? tab : go)('reels');
+    };
     enter.reels = () => { if (!slides[1].key) arrange(); place(0); slides[1].fill.style.width = '0%'; playCur(); };
     leave.reels = () => { slides.forEach(sl => sl.v.pause()); closeSheet(); };
     s.slidesRef = slides;
@@ -377,20 +445,26 @@
     for (let i = 1; i <= COOK[e]; i++) {
       const id = `cook_${e}_${i}`, cs = screen(id); back(cs);
       const nx = i < COOK[e] ? `cook_${e}_${i + 1}` : 'done_' + e;
-      const cta = M[id].ctas[M[id].ctas.length - 1]; hs(cs.content, cta, () => go(nx), { r: 50 });
+      // '다음' 버튼: 화면 하단 고정
+      const c = M[id].ctas[M[id].ctas.length - 1], cy0 = c[1] - 14, ch = c[3] + 14 - cy0;
+      const bar = pin(cs, null, cy0, ch + 80, 30); bar.classList.add('ctabar');
+      const fade = el('div', 'ctafade', bar); fade.style.background = `linear-gradient(rgba(${M[id].bg.join(',')},0), rgb(${M[id].bg.join(',')}) 70px)`;
+      img(U('cta_' + id), bar, 0, 0, 'ctaimg');
+      hs(bar, [c[0] - 30, c[1], c[2] - 30, c[3]], () => go(nx), { r: 50 });
+      cs.content.style.height = (parseFloat(cs.content.style.height) + 100) + 'px';
       if (D.dyn.timer[id]) timer(cs, D.dyn.timer[id]);
     }
     const ds = screen('done_' + e); back(ds);
     const dc = M['done_' + e].ctas[0];
     hs(ds.content, dc, () => go('cwrite'), { r: 50 });
-    hs(ds.content, [380, dc[3] + 30, 830, dc[3] + 150], () => openReels(REELS.indexOf(e)), { r: 20 });
+    hs(ds.content, [380, dc[3] + 30, 830, dc[3] + 150], () => openReels(REELS.indexOf(e), true), { r: 20 });
     (D.dyn.steps['done_' + e] || []).forEach(p => stepper(ds, p));
     photo(ds, D.photo['done_' + e]);
   });
   // 전자레인지 타이머
   function timer(s, o) {
     const [ox, oy] = o; let left = 180, t = null;
-    const lab = el('div', 'tlabel', s.content); at(lab, 110 + ox, 2010 + oy - SB, 460, 130); lab.style.display = 'none';
+    const lab = el('div', 'tlabel', s.content); at(lab, 112 + ox, 2008 + oy - SB, 420, 134); lab.style.display = 'none';
     const draw = () => { const m = String(Math.floor(left / 60)).padStart(2, '0'), ss = String(left % 60).padStart(2, '0'); lab.textContent = `${m}:${ss}`; lab.style.display = left === 180 ? 'none' : 'flex'; };
     const play = hs(s.content, [760 + ox, 2005 + oy, 910 + ox, 2155 + oy], () => {
       if (t) { clearInterval(t); t = null; play.classList.remove('running'); return; }
@@ -424,7 +498,9 @@
     chipsX.forEach(([a, b, to]) => hs(c, [a, 380, b, 480], () => to !== 'cmain' && go(to), { r: 50 }));
     hs(c, [60, 520, 1146, 770], () => go('cprofile'), { r: 30 });
     hs(c, [880, 870, 1146, 970], () => go('cvote'), { r: 20 });
-    hs(c, [60, 990, 1146, 1900], () => go('cvote'), { r: 30 });
+    hs(c, [60, 990, 1146, 1250], () => go('cvote'), { r: 30 });
+    hs(c, [60, 1780, 1146, 1900], () => go('cvote'), { r: 30 });
+    votes(s, 'cmain');
     hs(c, [880, 2040, 1146, 2140], () => go('cdeals'), { r: 20 });
     hs(c, [60, 2170, 1146, 2580], () => go('cdeal'), { r: 30 });
     hs(c, [880, 2770, 1146, 2870], () => go('cdeals'), { r: 20 });
@@ -438,16 +514,29 @@
   }
   { const s = screen('cwrite'); hs(s.content, [0, 186, 190, 340], goBack, { r: 40 }); }
   { const s = screen('csearch'); back(s); hs(s.content, [960, 186, 1206, 340], goBack); hs(s.content, [40, 870, 1166, 3500], () => go('cpost'), { r: 30 }); }
-  { const s = screen('cdeals'); back(s); [1080, 1820, 2560, 3300].forEach(y => hs(s.content, [60, y, 1146, y + 700], () => go('cdeal'), { r: 30 })); }
-  { const s = screen('cprofile'); back(s); hs(s.content, [60, 1140, 600, 1290], (e, h) => toast('팔로우했어요!'), { r: 30 }); }
+  {
+    const s = screen('cdeals'); back(s); [1080, 1820, 2560, 3300].forEach(y => hs(s.content, [60, y, 1146, y + 700], () => go('cdeal'), { r: 30 }));
+    // 글쓰기 버튼: 화면에 고정. 처음엔 '+'만 보이다가 누르면 '글쓰기'로 펼쳐지고, 한 번 더 누르면 글쓰기 화면
+    const f = pin(s, U('deal_fab'), 0, 400, 812); f.classList.add('dealfab'); img(U('deal_plus'), f, 0, 0, 'plusimg');
+    let open = false;
+    const fh = hs(f, [0, 0, 337, 173], () => { if (!open) { open = true; f.classList.add('open'); clearTimeout(f.t); f.t = setTimeout(() => { open = false; f.classList.remove('open'); }, 3500); } else go('cwrite'); }, { r: 90, dim: false });
+    enter.cdeals = () => { open = false; f.classList.remove('open'); };
+  }
+  {
+    const s = screen('cprofile'); back(s);
+    const fl = el('div', 'followbtn', s.content); at(fl, 66, 1155 - SB, 525, 123); fl.textContent = '팔로잉';
+    hs(s.content, [60, 1140, 600, 1290], () => { const on = !fl.classList.contains('on'); fl.classList.toggle('on', on); if (on) { pop(fl, 'tap'); toast('팔로우했어요!'); } }, { r: 30 });
+  }
   // 게시글 상세: 공감하기 + 댓글창
   ['cpost', 'cpost_photo', 'cvote', 'cshare', 'cdeal'].forEach(id => {
-    const s = screen(id, { pad: 300 }); back(s);
+    const s = screen(id, { pad: 460 }); back(s);
+    if (id === 'cvote') votes(s, 'cvote');
+    if (id === 'cdeal') hs(s.content, [60, 370, 1146, 600], () => go('fr_cold'), { r: 30 });
     const b = D.emp[id]; if (b) empathy(s, b);
     const bar = pin(s, U('comment_bar'), 0, 366);
     const inp = el('input', 'cinput', bar); inp.placeholder = ''; at(inp, 60, 60, 900, 130);
-    inp.addEventListener('focus', () => bar.classList.add('typing'));
-    inp.addEventListener('blur', () => { if (!inp.value) bar.classList.remove('typing'); });
+    inp.addEventListener('focus', () => { bar.classList.add('typing'); setTimeout(layout, 300); setTimeout(layout, 700); });
+    inp.addEventListener('blur', () => { bar.classList.remove('typing'); bar.style.transform = ''; setTimeout(layout, 100); });
     inp.addEventListener('keydown', e => { if (e.key === 'Enter' && inp.value) { inp.value = ''; inp.blur(); toast('댓글을 남겼어요'); } });
   });
   function empathy(s, [x, y, w, h]) {
@@ -483,6 +572,7 @@
   }
   {
     const s = screen('amain'); const c = s.content;
+    hs(c, [0, 186, 190, 340], goBack, { r: 40 }).style.zIndex = 8;   // 이전 버튼 (탭 화면이면 홈으로)
     bapuri(s, 'amain');
     hs(c, [40, 340, 560, 1000], () => go('agrow'), { r: 40, dim: false }).style.zIndex = 4;
     hs(c, [580, 340, 1166, 560], () => go('apoints'), { r: 30 });
@@ -496,6 +586,12 @@
   {
     const s = screen('acloset'); back(s); bapuri(s, 'acloset');
     hs(s.content, M.acloset.ctas[0], () => { toast('저장했어요'); setTimeout(goBack, 500); }, { r: 50 });
+    // 착용하기 ↔ 착용중 (한 번에 하나만 착용)
+    const wear = [96, 654].map((x, i) => stateImg(s.content, U('wear'), x, 2295, 456, 120, i === 1));
+    wear.forEach((w, i) => hs(s.content, [w === wear[0] ? 96 : 654, 2295, (w === wear[0] ? 96 : 654) + 456, 2415], () => {
+      if (w.value) return; wear.forEach(o => o.set(o === w)); pop(w, 'tap'); toast(i === 0 ? '요리사 장갑을 착용했어요' : '작은 주걱을 착용했어요');
+      const ch = s.content.querySelector('.charwrap img'); if (ch) pop(ch, 'hop');
+    }, { r: 50, dim: false }));
   }
   { const s = screen('ashop'); back(s); }
   { const s = screen('amission'); back(s); M.amission.ctas.forEach(b => hs(s.content, b, () => go('cwrite'), { r: 50 })); }
@@ -537,9 +633,9 @@
     const tabsX = { fr_cold: [400, 560], fr_frozen: [590, 760], fr_room: [790, 950] };
     Object.entries(tabsX).forEach(([to, [a, b]]) => hs(c, [a, 500, b, 620], () => to !== id && replace(to), { r: 50 }));
     // 카테고리 정렬 시트
-    const cat = sheetLayer(s, 'cat_sheet', 1248, 1566); cat.sh.classList.add('bottom'); cat.sh.style.left = '-19px';
+    const cat = sheetLayer(s, 'cat_sheet', 1248, 1250); cat.sh.classList.add('bottom'); cat.sh.style.left = '-19px';
     hs(cat.sh, [19, 950, 1225, 1120], cat.close, { r: 0 });
-    [[19, 175, 1225, 335], [19, 355, 1225, 515], [19, 535, 1225, 695], [19, 715, 1225, 875]].forEach(b => hs(cat.sh, b, () => setTimeout(cat.close, 180), { r: 0 }));
+    [[19, 166, 1225, 336], [19, 344, 1225, 514], [19, 520, 1225, 690], [19, 696, 1225, 866]].forEach(b => hs(cat.sh, b, () => { setTimeout(cat.close, 200); }, { r: 0 }));
     hs(c, [40, 500, 380, 620], cat.open, { r: 50 });
     // 식재료 팝오버
     const dim = el('div', 'frdim', c); at(dim, 0, 0, W, parseFloat(c.style.height));
@@ -554,20 +650,45 @@
       }, { r: 30, dim: false });
     });
     pp.addEventListener('click', e => { e.stopPropagation(); const r = pp.getBoundingClientRect(); const y = (e.clientY - r.top) / scale; if (y > 280) { close(); go('fr_info'); } });
-    hs(c, [470, 2360, 740, 2450], () => go('fr_list'), { r: 40 });
     // 하단 독 (고정)
     const dock = pin(s, U('dock_' + id), C.dock.y0, 2800 - C.dock.y0 + 40);
     hs(dock, [76, 2577, 276, 2777], () => tab('home'), { r: 100, dim: false });
     hs(dock, [550, 2580, 750, 2780], () => go('reg_manual'), { r: 60 });
     hs(dock, [740, 2580, 925, 2780], () => go('reg_qr'), { r: 60 });
     hs(dock, [920, 2580, 1110, 2780], () => go('reg_cam'), { r: 60 });
+    // '전체보기' 버튼: 스크롤과 상관없이 독 위에 고정
+    const all = pin(s, U('fr_all'), 2441, 2800 - 2441 + 40, 479);
+    hs(all, [479 - 479, 2441, 727 - 479, 2548], () => go('fr_list'), { r: 54 });
   });
   function replace(id) { if (busy) return; history.replaceState({ id }, '', '#' + id); show(id, 'tab'); }
   { // 식재료 정보
     const s = screen('fr_info'); back(s);
     const eat = sheetLayer(s, 'eat_sheet', 1368, 873); eat.sh.classList.add('bottom'); eat.sh.style.left = '-18px';
-    const cta = M.fr_info.ctas[0]; hs(s.content, cta, eat.open, { r: 50 });
-    hs(eat.sh, [60, 600, 1180, 785], () => { eat.close(); toast('기록했어요!'); }, { r: 50 });
+    const cta = M.fr_info.ctas[0]; hs(s.content, cta, () => eat.open(), { r: 50 });
+    hs(eat.sh, [60, 600, 1180, 785], () => { eat.close(); toast(`${amount}개 먹었다고 기록했어요!`); }, { r: 50 });
+    // 먹은 양 슬라이더 (0~6개, 손가락으로 끌기 + 1~4개 칩)
+    const MAX = 6, TX0 = 85, TX1 = 1156;
+    let amount = 4;
+    const big = el('div', 'eatnum', eat.sh); at(big, 80, 172, 260, 96);
+    const cover = el('div', 'eatcover', eat.sh); at(cover, TX0 - 30, 292, TX1 - TX0 + 60, 70);
+    const track = el('div', 'eattrack', eat.sh); at(track, TX0, 312, TX1 - TX0, 26);
+    const fill = el('div', 'eatfill', track);
+    const thumb = el('div', 'eatthumb', track);
+    const setAmt = (v, snap = true) => {
+      const r = Math.max(0, Math.min(1, v / MAX)); amount = Math.round(v);
+      const px = (snap ? amount / MAX : r) * (TX1 - TX0);
+      fill.style.width = px + 'px'; thumb.style.left = (px - 27) + 'px'; big.textContent = amount + '개';
+    };
+    setAmt(4);
+    const drag = el('div', 'hs', eat.sh); at(drag, TX0 - 40, 270, TX1 - TX0 + 80, 110); drag.style.zIndex = 8; drag.style.touchAction = 'none';
+    const fromEv = e => { const r = track.getBoundingClientRect(); return (e.clientX - r.left) / r.width * MAX; };
+    let dragging = false;
+    drag.addEventListener('pointerdown', e => { dragging = true; drag.setPointerCapture(e.pointerId); setAmt(fromEv(e), false); });
+    drag.addEventListener('pointermove', e => { if (dragging) setAmt(fromEv(e), false); });
+    const up = e => { if (!dragging) return; dragging = false; setAmt(fromEv(e)); if (navigator.vibrate) navigator.vibrate(6); };
+    drag.addEventListener('pointerup', up); drag.addEventListener('pointercancel', up);
+    [[84, 210], [210, 330], [330, 450], [450, 570]].forEach(([a, b], i) => hs(eat.sh, [a, 400, b, 530], () => setAmt(i + 1), { r: 40 }));
+    const open0 = eat.open; eat.open = () => { setAmt(4); open0(); };
     const st = s.content.querySelector('.hscroll'); if (st) { st.oy = 0; [0, 1, 2, 3].forEach(i => hs(st, [66 + i * 476, 0, 66 + i * 476 + 450, 800], () => openReels(i), { r: 30 })); }
   }
   { // 세부 리스트
